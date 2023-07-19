@@ -56,7 +56,7 @@ class MainWindow(QMainWindow):
         password_field = wait.until(EC.presence_of_element_located((By.ID, 'inputPass')))
 
         username_field.send_keys('5169')
-        password_field.send_keys('xpert')
+        password_field.send_keys('')
 
         form = driver.find_element(By.TAG_NAME, 'form')
         form.submit()
