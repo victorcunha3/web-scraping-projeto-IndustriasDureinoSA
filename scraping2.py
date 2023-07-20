@@ -1,3 +1,4 @@
+import os
 import csv
 import re
 import pandas as pd
@@ -9,6 +10,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from qt_material import apply_stylesheet, QtStyleTools, QUiLoader
+
 
 class MainWindow(QMainWindow, QtStyleTools):
     def __init__(self):
@@ -39,18 +41,18 @@ class MainWindow(QMainWindow, QtStyleTools):
         self.button.clicked.connect(self.buscar_tanques)
         self.layout.addWidget(self.button)
 
-        self.download_button = QPushButton("Exportar(EXCEL)")
-        self.download_button.clicked.connect(self.download_data)
-        self.download_button.setEnabled(False)
-        self.layout.addWidget(self.download_button)
-
         self.dados_tanques = []
+        self.file_path = "dados_atualizados.xlsx"  # Caminho do arquivo Excel
+
+        # Carregar dados existentes do arquivo Excel, se houver
+        if os.path.exists(self.file_path):
+            self.load_data_from_excel()
 
     def buscar_tanques(self):
         chromedriver = r"C:\Users\Aprendiz\Downloads\chromedriver.exe"
         service = Service(chromedriver)
         driver = webdriver.Chrome(service=service)
-        driver.get('https://xpert.com.br/atg/')
+        driver.get('https://xpert.com.br/atg/') 
         iframes = driver.find_elements(By.TAG_NAME, 'iframe')
 
         if len(iframes) > 0:
@@ -61,14 +63,12 @@ class MainWindow(QMainWindow, QtStyleTools):
         password_field = wait.until(EC.presence_of_element_located((By.ID, 'inputPass')))
 
         username_field.send_keys('5169')
-        password_field.send_keys('')
+        password_field.send_keys('xpert')
 
         form = driver.find_element(By.TAG_NAME, 'form')
         form.submit()
 
         tanques = wait.until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, 'div.tanque')))
-
-        self.dados_tanques = []
 
         for tanque in tanques:
             capacidade_element = tanque.find_element(By.XPATH, './/h4[contains(text(), "Capacidade")]/b')
@@ -92,36 +92,47 @@ class MainWindow(QMainWindow, QtStyleTools):
                 "Litros": litros,
                 "Capacidade": capacidade,
                 "Porcentagem": porcentagem,
-                #"Total Litros": total_litros,
             }
 
             self.dados_tanques.append(dados)
 
         driver.quit()
 
-        self.table.setRowCount(len(self.dados_tanques))
+        self.save_data_to_excel()
 
-        for row, dados in enumerate(self.dados_tanques):
-            data_execucao_item = QTableWidgetItem(dados["Data Execução"])
-            litros_item = QTableWidgetItem(dados["Litros"])
-            capacidade_item = QTableWidgetItem(dados["Capacidade"])
-            porcentagem_item = QTableWidgetItem(dados["Porcentagem"])
+    def load_data_from_excel(self):
+        df = pd.read_excel(self.file_path)
+        self.update_table(df)
+
+    def save_data_to_excel(self):
+        # Verifica se o arquivo Excel existe
+        if os.path.exists(self.file_path):
+            # Carrega os dados existentes do Excel para o DataFrame
+            df = pd.read_excel(self.file_path)
+            # Concatena os novos dados aos dados existentes
+            df = pd.concat([df, pd.DataFrame(self.dados_tanques)], ignore_index=True)
+        else:
+            df = pd.DataFrame(self.dados_tanques)
+
+        # Salva os dados no arquivo Excel
+        df.to_excel(self.file_path, index=False)
+
+        # Atualiza a tabela na GUI
+        self.update_table(df)
+
+    def update_table(self, df):
+        self.table.setRowCount(len(df))
+
+        for row in range(len(df)):
+            data_execucao_item = QTableWidgetItem(str(df.loc[row, "Data Execução"]))
+            litros_item = QTableWidgetItem(str(df.loc[row, "Litros"]))
+            capacidade_item = QTableWidgetItem(str(df.loc[row, "Capacidade"]))
+            porcentagem_item = QTableWidgetItem(str(df.loc[row, "Porcentagem"]))
 
             self.table.setItem(row, 0, data_execucao_item)
             self.table.setItem(row, 1, litros_item)
             self.table.setItem(row, 2, capacidade_item)
             self.table.setItem(row, 3, porcentagem_item)
-
-        self.download_button.setEnabled(True)
-
-    def download_data(self):
-        file_dialog = QFileDialog()
-        caminho_arquivo, _ = file_dialog.getSaveFileName(self, "Salvar arquivo", "", "Arquivo XLSX (*.xlsx)")
-
-        if caminho_arquivo:
-            df = pd.DataFrame(self.dados_tanques)
-            df.to_excel(caminho_arquivo, index=False)
-
 
 if __name__ == "__main__":
     app = QApplication([])
