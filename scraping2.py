@@ -159,7 +159,7 @@ class MainWindow(QMainWindow, QtStyleTools):
 if __name__ == "__main__":
     app = QApplication([])
     window = MainWindow()
-    apply_stylesheet(app, theme='dark_teal.xml', invert_secondary=True)
+    apply_stylesheet(app, theme='light_red.xml', invert_secondary=True)
 
     window.show()
     app.exec()
