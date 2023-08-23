@@ -1,13 +1,17 @@
+import os
+import re
+import pandas as pd
+import datetime
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-import re
-import pandas as pd
+from typing import List
 
-def buscar_tanques() -> list:
-    chromedriver = r"C:\Users\Aprendiz\Downloads\chromedriver.exe"
+def main():
+    #chromedriver = r"C:\Users\Aprendiz\Downloads\chromedriver.exe"#driver local
+    chromedriver = r"c:\Users\Aprendiz\Downloads\chromedriver-win64\chromedriver.exe"
     service = Service(chromedriver)
     driver = webdriver.Chrome(service=service)
     driver.get('https://xpert.com.br/atg/')
@@ -20,55 +24,62 @@ def buscar_tanques() -> list:
     username_field = wait.until(EC.presence_of_element_located((By.ID, 'inputUser')))
     password_field = wait.until(EC.presence_of_element_located((By.ID, 'inputPass')))
 
-    username_field.send_keys('5169')
-    password_field.send_keys('')
+    username_field.send_keys('')
+    password_field.send_keys('xpert')
 
     form = driver.find_element(By.TAG_NAME, 'form')
     form.submit()
 
-    tanques = wait.until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, 'div.tanque')))
+    tanques = wait.until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, 'div.content.border-solid')))
 
-    dados_tanques = []
+    dados_tanques:List = []
 
     for tanque in tanques:
-        #informacao_tanque = tanque.find_element(By.XPATH, './/h4[contains(text(), "Capacidade")]/b')
         capacidade_element = tanque.find_element(By.XPATH, './/h4[contains(text(), "Capacidade")]/b')
         litros_element = tanque.find_element(By.CSS_SELECTOR, 'h1.leitura-tanque > b')
         porcentagem_element = tanque.find_element(By.CSS_SELECTOR, 'span.ng-binding')
-        #tanque_element = tanque.find_element(By.CSS_SELECTOR, 'div.tanque-label > h3')
-        #tanque_element = tanque.find_element(By.XPATH, './/h3[contains(text(), "tanque")]')
-        #tanque_element = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, 'h3.ng-binding')))
-        #tanque = tanque_element.text
+        h3_element = tanque.find_element(By.XPATH, './/h3')
+        h3_text = h3_element.text.strip()
 
         capacidade_text = capacidade_element.text
         capacidade_match = re.search(r'[\d.]+', capacidade_text)
         capacidade = capacidade_match.group() if capacidade_match else ''
 
-        #tanque_nome = tanque_element.text
-        #tanque_match = re.search(r'(\d+)\s*-\s*tanque\s*\d+\s*(\w+)', tanque_nome)
-        #tanque_info = f'{tanque_match.group(1)} - tanque {tanque_match.group(2)}' if tanque_match else ''
-
         litros_text = litros_element.text
-        litros_match = re.search(r'[\d.]+', litros_text)
-        litros = litros_match.group() if litros_match else ''
+        litros_match = re.search(r'(\d+(\.\d+)?)', litros_text)
+        litros = litros_match.group(1) if litros_match else '0.0'
+
         porcentagem = porcentagem_element.text
 
+        data_execucao = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
         dados = {
+            "Data Execução": data_execucao,
             "Litros": litros,
             "Capacidade": capacidade,
-            "porcentagem": porcentagem,
-            #"Tanque": tanque_element
+            "Porcentagem": porcentagem,
+            "Nome": h3_text
         }
-
         dados_tanques.append(dados)
-
-    print(dados_tanques)
 
     driver.quit()
 
+    file_path = r"t:\FABRICA\PRODUCAO\Compartilhado\4 - SETORES\4.1 - Ensacado\hexanoTeste.xlsx"
 
-import pandas as pd
+    if os.path.exists(file_path):
+        existing_df = pd.read_excel(file_path)
+        existing_data = existing_df.to_dict(orient='records')
+        dados_tanques = existing_data + dados_tanques
 
-dados_tanques = buscar_tanques()
-df = pd.DataFrame(dados_tanques)
-df.to_excel('dados_tanques.xlsx', index=False)
+    try:
+        if len(dados_tanques) > 0:
+            df = pd.DataFrame(dados_tanques)
+            df.to_excel(file_path, index=False)
+            print("Os dados foram exportados para o Excel com sucesso.")
+        else:
+            print("Não há dados para exportar.")
+    except PermissionError:
+        print("ERRO! EXCEL ABERTO! Feche o arquivo e tente novamente.")
+
+if __name__ == "__main__":
+    main()
