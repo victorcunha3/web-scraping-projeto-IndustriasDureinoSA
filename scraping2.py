@@ -1,165 +1,85 @@
 import os
-import csv
 import re
-import pandas as pd
 import datetime
-from PySide6.QtWidgets import QApplication, QMainWindow, QLabel, QVBoxLayout, QWidget, QPushButton, QFileDialog, QTableWidgetItem, QTableWidget, QHeaderView, QMessageBox
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from qt_material import apply_stylesheet, QtStyleTools, QUiLoader
+from typing import List
+from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
+from openpyxl import load_workbook, Workbook
 
+def main():
+    chromedriver = r"c:\Users\Aprendiz\Downloads\chromedriver-win64\chromedriver.exe"
+    service = Service(chromedriver)
+    driver = webdriver.Chrome(service=service)
 
-class MainWindow(QMainWindow, QtStyleTools):
-    def __init__(self):
-        super().__init__()
+    driver.get('https://xpert.com.br/atg/')
+    iframes = driver.find_elements(By.TAG_NAME, 'iframe')
 
-        self.setWindowTitle("Busca de Tanques(desenvolvido por Victor)")
-        self.setMinimumSize(500, 400)
+    if len(iframes) > 0:
+        driver.switch_to.frame(iframes[0])
 
-        self.central_widget = QWidget(self)
-        self.setCentralWidget(self.central_widget)
+    wait = WebDriverWait(driver, 20)
+    username_field = wait.until(EC.presence_of_element_located((By.ID, 'inputUser')))
+    password_field = wait.until(EC.presence_of_element_located((By.ID, 'inputPass')))
 
-        self.layout = QVBoxLayout()
-        self.central_widget.setLayout(self.layout)
+    username_field.send_keys('.')
+    password_field.send_keys('.')
 
-        self.label = QLabel("Dados dos Tanques:")
-        self.layout.addWidget(self.label)
+    form = driver.find_element(By.TAG_NAME, 'form')
+    form.submit()
 
-        self.table = QTableWidget()
-        self.table.setColumnCount(4)
-        self.table.setHorizontalHeaderLabels(["Data Execução", "Litros", "Capacidade", "Porcentagem"])
-        header = self.table.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
-        self.layout.addWidget(self.table)
+    tanques = wait.until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, 'div.content.border-solid')))
 
-        self.button_buscar = QPushButton("Buscar Tanques")
-        self.button_buscar.clicked.connect(self.buscar_tanques)
-        self.layout.addWidget(self.button_buscar)
+    dados_tanques: List = []
 
-        self.button_exportar = QPushButton("Exportar para Excel")
-        self.button_exportar.clicked.connect(self.export_to_excel)
-        self.layout.addWidget(self.button_exportar)
+    for tanque in tanques:
+        capacidade_element = tanque.find_element(By.XPATH, './/h4[contains(text(), "Capacidade")]/b')
+        litros_element = tanque.find_element(By.CSS_SELECTOR, 'h1.leitura-tanque > b')
+        porcentagem_element = tanque.find_element(By.CSS_SELECTOR, 'span.ng-binding')
+        h3_element = tanque.find_element(By.XPATH, './/h3')
+        h3_text = h3_element.text.strip()
 
-        self.dados_tanques = []
-        self.file_path = "dados_atualizados.xlsx"  # Caminho do arquivo Excel
+        capacidade_text = capacidade_element.text
+        litros_text = litros_element.text
+        #litros = (re.sub(r'[^\d.]', '', litros_text)) if litros_text else 0.0
+        porcentagem_text = porcentagem_element.text
 
-        # Carregar dados existentes do arquivo Excel, se houver
-        if os.path.exists(self.file_path):
-            self.load_data_from_excel()
+        data_execucao = datetime.datetime.now().strftime('%d-%m-%Y')
+        hora_execucao = datetime.datetime.now().strftime('%H:%M:%S')
 
-    def buscar_tanques(self):
-        self.show_status_message("Buscando dados...", 3000)
+        #capacidade = float(re.sub(r'[^\d.]', '', capacidade_text)) if capacidade_text else 0.0
 
-        chromedriver = r"C:\Users\victo\Downloads\chromedriver_win32\chromedriver.exe"
-        service = Service(chromedriver)
-        driver = webdriver.Chrome(service=service)
-        driver.get('https://xpert.com.br/atg/')
-        iframes = driver.find_elements(By.TAG_NAME, 'iframe')
+        dados = {
+            "Data Execução": data_execucao,
+            "Litros": litros_text,
+            "Capacidade": capacidade_text,
+            "Porcentagem": porcentagem_text,
+            "Nome": h3_text,
+            "Hora Execução": hora_execucao
+        }
+        dados_tanques.append(dados)
 
-        if len(iframes) > 0:
-            driver.switch_to.frame(iframes[0])
+    driver.quit()
 
-        wait = WebDriverWait(driver, 20)
-        username_field = wait.until(EC.presence_of_element_located((By.ID, 'inputUser')))
-        password_field = wait.until(EC.presence_of_element_located((By.ID, 'inputPass')))
+    #file_path = r"t:\FABRICA\PRODUCAO\Compartilhado\4 - SETORES\4.1 - Ensacado\hexanoTeste2.xlsx"
+    file_path = r't:\FABRICA\PRODUCAO\Compartilhado\4 - SETORES\4.1 - Ensacado\hexanoDadosATUALIZADO.xlsx'
+    try:
+        wb = load_workbook(file_path)
+        sheet = wb.active
+    except FileNotFoundError:
+        wb = Workbook()
+        sheet = wb.active
+        sheet.append(["Data Execução", "Litros", "Capacidade", "Porcentagem", "Nome", "Hora Execução"])
 
-        username_field.send_keys('5169')
-        password_field.send_keys('xpert')
+    for dados in dados_tanques:
+        sheet.append([dados["Data Execução"], dados["Litros"], dados["Capacidade"],
+                      dados["Porcentagem"], dados["Nome"], dados["Hora Execução"]])
 
-        form = driver.find_element(By.TAG_NAME, 'form')
-        form.submit()
-
-        tanques = wait.until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, 'div.tanque')))
-
-        for tanque in tanques:
-            capacidade_element = tanque.find_element(By.XPATH, './/h4[contains(text(), "Capacidade")]/b')
-            litros_element = tanque.find_element(By.CSS_SELECTOR, 'h1.leitura-tanque > b')
-            porcentagem_element = tanque.find_element(By.CSS_SELECTOR, 'span.ng-binding')
-
-            capacidade_text = capacidade_element.text
-            capacidade_match = re.search(r'[\d.]+', capacidade_text)
-            capacidade = capacidade_match.group() if capacidade_match else ''
-
-            litros_text = litros_element.text
-            litros_match = re.search(r'(\d+(\.\d+)?)', litros_text)
-            litros = litros_match.group(1) if litros_match else '0.0'
-
-            porcentagem = porcentagem_element.text
-
-            data_execucao = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-
-            dados = {
-                "Data Execução": data_execucao,
-                "Litros": litros,
-                "Capacidade": capacidade,
-                "Porcentagem": porcentagem,
-            }
-
-            self.dados_tanques.append(dados)
-
-        driver.quit()
-
-        self.update_table()
-
-    def export_to_excel(self):
-        try:
-            if len(self.dados_tanques) > 0:
-                df = pd.DataFrame(self.dados_tanques)
-                df.to_excel(self.file_path, index=False)
-                self.show_update_message()
-            else:
-                self.show_status_message("Não há dados para exportar.", 3000)
-        except PermissionError:
-            self.show_status_message("ERRO! EXCEL ABERTO! Feche o arquivo e tente novamente.", 6000)
-
-    def show_update_message(self):
-        msg_box = QMessageBox(self)
-        msg_box.setIcon(QMessageBox.Information)
-        msg_box.setWindowTitle("Dados Atualizados")
-        msg_box.setText("Os dados foram exportados para o Excel com sucesso.")
-        msg_box.addButton(QMessageBox.Ok)
-        msg_box.exec()
-
-    def load_data_from_excel(self):
-        df = pd.read_excel(self.file_path)
-        self.dados_tanques = df.to_dict(orient='records')
-        self.update_table()
-
-    def update_table(self):
-        self.table.clearContents()
-        self.table.setRowCount(len(self.dados_tanques))
-
-        for row, dados in enumerate(self.dados_tanques):
-            data_execucao_item = QTableWidgetItem(str(dados["Data Execução"]))
-            litros_item = QTableWidgetItem(str(dados["Litros"]))
-            capacidade_item = QTableWidgetItem(str(dados["Capacidade"]))
-            porcentagem_item = QTableWidgetItem(str(dados["Porcentagem"]))
-
-            self.table.setItem(row, 0, data_execucao_item)
-            self.table.setItem(row, 1, litros_item)
-            self.table.setItem(row, 2, capacidade_item)
-            self.table.setItem(row, 3, porcentagem_item)
-
-    def show_status_message(self, message, duration):
-        status_bar = self.statusBar()
-        status_bar.showMessage(message, duration)
-
-    def closeEvent(self, event):
-        reply = QMessageBox.question(self, 'Salvar Dados', 'Deseja salvar os dados antes de sair?', QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
-        if reply == QMessageBox.Yes:
-            self.export_to_excel()
-        event.accept()
-
+    wb.save(file_path)
+    print("Os dados foram exportados para o Excel com sucesso.")
 
 if __name__ == "__main__":
-    app = QApplication([])
-    window = MainWindow()
-    apply_stylesheet(app, theme='light_red.xml', invert_secondary=True)
-
-    window.show()
-    app.exec()
+    main()
