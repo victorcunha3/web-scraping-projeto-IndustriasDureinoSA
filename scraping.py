@@ -1,6 +1,5 @@
 import os
 import re
-import pandas as pd
 import datetime
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
@@ -8,12 +7,14 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from typing import List
+from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
+from openpyxl import load_workbook, Workbook
 
 def main():
-    #chromedriver = r"C:\Users\Aprendiz\Downloads\chromedriver.exe"#driver local
     chromedriver = r"c:\Users\Aprendiz\Downloads\chromedriver-win64\chromedriver.exe"
     service = Service(chromedriver)
     driver = webdriver.Chrome(service=service)
+
     driver.get('https://xpert.com.br/atg/')
     iframes = driver.find_elements(By.TAG_NAME, 'iframe')
 
@@ -25,14 +26,14 @@ def main():
     password_field = wait.until(EC.presence_of_element_located((By.ID, 'inputPass')))
 
     username_field.send_keys('')
-    password_field.send_keys('xpert')
+    password_field.send_keys('')
 
     form = driver.find_element(By.TAG_NAME, 'form')
     form.submit()
 
     tanques = wait.until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, 'div.content.border-solid')))
 
-    dados_tanques:List = []
+    dados_tanques: List = []
 
     for tanque in tanques:
         capacidade_element = tanque.find_element(By.XPATH, './/h4[contains(text(), "Capacidade")]/b')
@@ -42,44 +43,45 @@ def main():
         h3_text = h3_element.text.strip()
 
         capacidade_text = capacidade_element.text
-        capacidade_match = re.search(r'[\d.]+', capacidade_text)
-        capacidade = capacidade_match.group() if capacidade_match else ''
-
         litros_text = litros_element.text
-        litros_match = re.search(r'(\d+(\.\d+)?)', litros_text)
-        litros = litros_match.group(1) if litros_match else '0.0'
+        #litros = (re.sub(r'[^\d.]', '', litros_text)) if litros_text else 0.0
+        porcentagem_text = porcentagem_element.text
 
-        porcentagem = porcentagem_element.text
+        data_execucao = datetime.datetime.now().strftime('%d-%m-%Y')
+        hora_execucao = datetime.datetime.now().strftime('%H:%M:%S')
 
-        data_execucao = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        #capacidade = float(re.sub(r'[^\d.]', '', capacidade_text)) if capacidade_text else 0.0
 
         dados = {
             "Data Execução": data_execucao,
-            "Litros": litros,
-            "Capacidade": capacidade,
-            "Porcentagem": porcentagem,
-            "Nome": h3_text
+            "Litros": litros_text,
+            "Capacidade": capacidade_text,
+            "Porcentagem": porcentagem_text,
+            "Nome": h3_text,
+            "Hora Execução": hora_execucao
         }
         dados_tanques.append(dados)
 
     driver.quit()
 
-    file_path = r"t:\FABRICA\PRODUCAO\Compartilhado\4 - SETORES\4.1 - Ensacado\hexanoTeste.xlsx"
-
-    if os.path.exists(file_path):
-        existing_df = pd.read_excel(file_path)
-        existing_data = existing_df.to_dict(orient='records')
-        dados_tanques = existing_data + dados_tanques
-
+    #file_path = r"t:\FABRICA\PRODUCAO\Compartilhado\4 - SETORES\4.1 - Ensacado\hexanoTeste2.xlsx"
+    file_path = r't:\FABRICA\PRODUCAO\Compartilhado\4 - SETORES\4.1 - Ensacado\hexanoDadosATUALIZADO.xlsx'
     try:
-        if len(dados_tanques) > 0:
-            df = pd.DataFrame(dados_tanques)
-            df.to_excel(file_path, index=False)
-            print("Os dados foram exportados para o Excel com sucesso.")
-        else:
-            print("Não há dados para exportar.")
-    except PermissionError:
-        print("ERRO! EXCEL ABERTO! Feche o arquivo e tente novamente.")
+        wb = load_workbook(file_path)
+        sheet = wb.active
+    except FileNotFoundError:
+        wb = Workbook()
+        sheet = wb.active
+        sheet.append(["Data Execução", "Litros", "Capacidade", "Porcentagem", "Nome", "Hora Execução"])
+
+    for dados in dados_tanques:
+        sheet.append([dados["Data Execução"], dados["Litros"], dados["Capacidade"],
+                      dados["Porcentagem"], dados["Nome"], dados["Hora Execução"]]
+                      
+                      )
+
+    wb.save(file_path)
+    print("Os dados foram exportados para o Excel com sucesso.")
 
 if __name__ == "__main__":
     main()
