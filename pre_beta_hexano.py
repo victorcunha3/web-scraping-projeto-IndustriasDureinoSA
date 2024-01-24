@@ -63,7 +63,6 @@ def busca_tanques():
                 "Nome Tanque": h3_text,
                 "Hora Execução": hora_execucao
             }
-            # Adicionar lista ao EXCEL
             dados_tanques.append(dados)
 
         except:
@@ -93,23 +92,80 @@ def busca_tanques():
                 chave, valor = map(str.strip, linha.split(':', 1))
                 relatorio_dicionario[chave] = valor
         
-        #Adicionar lista ao EXCEL
         dados_relatorio_dia.append(relatorio_dicionario)
-    pprint.pprint(dados_relatorio_dia)
-    
+    #pprint.pprint(dados_relatorio_dia)
+    contador_tanque: int = 0
+    relatorio_lista_final: typing.List = []
 
+    for tanque_atual in dados_relatorio_dia:
+        try:
+            contador_tanque += 1
+            volume_inicial_tanque = tanque_atual['Volume Inicial']
+            #Não foi necessário usar a capacidade
+            #capacidade_total = tanque_atual['Capacidade']
+            volume_combustivel = tanque_atual["Volume Combustível"]
+
+            dados_relatorio_final = {
+                "Tanque": contador_tanque,
+                "Volume inicial": volume_inicial_tanque,
+                #"Capacidade": capacidade_total,
+                "Volume de Combustível": volume_combustivel
+            }
+            relatorio_lista_final.append(dados_relatorio_final)
+
+        except:
+            print("Erro em Iteração!!")
+    
     driver.quit()
-    pprint.pprint(dados_tanques)
-    print(link_relatorio_diario)
+    pprint.pprint(relatorio_lista_final)
     time.sleep(3)
+
+    #Adicionando dados ao excel
+    enviar_dados_excel(dados_tanques)
+    enviar_relatorio_excel(relatorio_lista_final)
+
+def enviar_dados_excel(dados_tanques):
+    try:
+        wb = load_workbook('tanque_excel.xlsx')
+        sheet = wb.active
+    except FileNotFoundError:
+        wb = Workbook()
+        sheet = wb.active
+        sheet.append(["Data Execução", "Litros", "Capacidade", "Porcentagem", "Nome", "Hora Execução"])
+
+    for dados in dados_tanques:
+        sheet.append([dados["Data Execução"], dados["Litros"], dados["Capacidade"],
+                      dados["Porcentagem"], dados["Nome Tanque"], dados["Hora Execução"]]
+                      
+                      )
+
+    wb.save('tanque_excel.xlsx')
+    print("Os dados foram exportados para o Excel com sucesso.")
+
+
+def enviar_relatorio_excel(relatorio):
+    try:
+        wb = load_workbook('relatorio_excel.xlsx')
+        sheet = wb.active
+    except FileNotFoundError:
+        wb = Workbook()
+        sheet = wb.active
+        sheet.append(["Tanque", "Volume Inicial", "Volume de Combustível"])
+    
+    for dado_atual in relatorio:
+        sheet.append([dado_atual["Tanque"], dado_atual["Volume inicial"],
+                      dado_atual["Volume de Combustível"]])
+    
+    wb.save('relatorio_excel.xlsx')
+    print("Os dados de relatório exportados para o Excel com sucesso.")
 
 
 def main():
     iniciar_navegador("https://xpert.com.br/atg/")
-    buscar_campos("inputUser", "inputPass", "xpert", "5169")
+    buscar_campos("inputUser", "inputPass", "", "")
     busca_tanques()
-    time.sleep(5)
     driver.quit()
+
 
 if __name__ == "__main__":
     main()
