@@ -6,166 +6,181 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-import pprint
 from openpyxl import load_workbook, Workbook
+import pprint
 
-chrome_driver_path = r"C:\Users\victo\Downloads\chromedriver-win64\chromedriver-win64\chromedriver.exe"
+# Const
+CHROME_DRIVER_PATH:str = r"c:\Users\aprendiz.DUREINO\Downloads\driverCurrent\chromedriver-win64\chromedriver.exe"
+TANQUE_EXCEL_FILE:str = 'tanque_excel.xlsx'
+RELATORIO_EXCEL_FILE:str = 'relatorio_excel.xlsx'
 
-def iniciar_navegador(url: str):
-    global driver
-    iniciar_chromedriver = Service(chrome_driver_path)
-    driver = webdriver.Chrome(service=iniciar_chromedriver)
-    driver.get(url)
-    iframes = driver.find_elements(By.TAG_NAME, 'iframe')
-    if iframes:
-        driver.switch_to.frame(iframes[0])
+class TanqueHexano:
+    #Realizar encapsulamento OPCIONAL
+    def __init__(self, url: str, usuario_id: str, senha_id: str, senha_site: str, usuario_site: str):
+        self.url = url
+        self.usuario_id = usuario_id
+        self.senha_id = senha_id
+        self.senha_site = senha_site
+        self.usuario_site = usuario_site
+        self.driver = None
 
-def buscar_campos(usuario_id: str, senha_id: str, senha_site: str, usuario_site: str):
-    wait = WebDriverWait(driver, 20)
-    campo_usuario = wait.until(EC.presence_of_element_located((By.ID, usuario_id)))
-    campo_senha = wait.until(EC.presence_of_element_located((By.ID, senha_id)))
-    campo_usuario.send_keys(usuario_site)
-    campo_senha.send_keys(senha_site)
-    time.sleep(2)
-    formulario = driver.find_element(By.TAG_NAME, 'form')
-    formulario.submit()
+    def iniciar_navegador(self) -> None:
+        iniciar_chromedriver = Service(CHROME_DRIVER_PATH)
+        self.driver = webdriver.Chrome(service=iniciar_chromedriver)
+        self.driver.get(self.url)
+        iframes = self.driver.find_elements(By.TAG_NAME, 'iframe')
+        if iframes:
+            self.driver.switch_to.frame(iframes[0])
 
-def busca_tanques():
-    wait = WebDriverWait(driver, 10)
-    try:
-        tanques = wait.until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, 'div.content.border-solid')))
-    except Exception as e:
-        print(f"Erro ao buscar tanques: {e}")
+    def buscar_campos(self) -> None:
+        wait = WebDriverWait(self.driver, 20)
+        campo_usuario = wait.until(EC.presence_of_element_located((By.ID, self.usuario_id)))
+        campo_senha = wait.until(EC.presence_of_element_located((By.ID, self.senha_id)))
+        campo_usuario.send_keys(self.usuario_site)
+        campo_senha.send_keys(self.senha_site)
+        time.sleep(2)
+        formulario = self.driver.find_element(By.TAG_NAME, 'form')
+        formulario.submit()
 
-    time.sleep(6)
-    dados_tanques: typing.List = []
-
-    for tanque in tanques:
+    def busca_tanques(self) -> None:
+        wait = WebDriverWait(self.driver, 10)
         try:
-            capacidade_element = tanque.find_element(By.XPATH, './/h4[contains(text(), "Capacidade")]/b')
-            litros_element = tanque.find_element(By.CSS_SELECTOR, 'h1.leitura-tanque > b')
-            porcentagem_element = tanque.find_element(By.CSS_SELECTOR, 'span.ng-binding')
-            h3_element = tanque.find_element(By.XPATH, './/h3')
-            h3_text = h3_element.text.strip()
+            tanques = wait.until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, 'div.content.border-solid')))
+        except Exception as e:
+            print(f"Erro ao buscar tanques: {e}")
 
-            capacidade_text = capacidade_element.text
-            litros_text = litros_element.text
-            porcentagem_text = porcentagem_element.text
+        time.sleep(6)
+        dados_tanques: typing.List = []
 
+        for tanque_atual in tanques:
+            try:
+                capacidade_element = tanque_atual.find_element(By.XPATH, './/h4[contains(text(), "Capacidade")]/b')
+                litros_element = tanque_atual.find_element(By.CSS_SELECTOR, 'h1.leitura-tanque > b')
+                porcentagem_element = tanque_atual.find_element(By.CSS_SELECTOR, 'span.ng-binding')
+                h3_element = tanque_atual.find_element(By.XPATH, './/h3')
+                h3_text = h3_element.text.strip()
+
+                capacidade_text = capacidade_element.text
+                litros_text = litros_element.text
+                porcentagem_text = porcentagem_element.text
+
+                data_execucao = datetime.datetime.now().strftime('%d-%m-%Y')
+                hora_execucao = datetime.datetime.now().strftime('%H:%M:%S')
+
+                dados: typing.Dict = {
+                    "Data Execução": data_execucao,
+                    "Litros": litros_text,
+                    "Capacidade": capacidade_text,
+                    "Porcentagem": porcentagem_text,
+                    "Nome Tanque": h3_text,
+                    "Hora Execução": hora_execucao
+                }
+                dados_tanques.append(dados)
+
+            except Exception as e:
+                print(f"Impossível encontrar tanques: {e}")
+
+        try:
+            time.sleep(7)
+            link_relatorio_diario = wait.until(EC.presence_of_element_located(
+                (By.XPATH, '//a[contains(@href, "#/analitico") and contains(text(), "Rel. Diário")]')))
+        except Exception as e:
+            print(f"IMPOSSIVEL encontrar link relatório diário: {e}")
+
+        try:
+            time.sleep(7)
+            link_relatorio_diario.click()
+            time.sleep(3)
+            print("CLICADO")
+        except Exception as e:
+            print(f"Erro ao clicar no link: {e}")
+
+        dados_relatorio_dia: typing.List[typing.Dict[str, str]] = []
+        tanques_relatorio = wait.until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, 'div.content.border-solid')))
+        for div in tanques_relatorio:
+            linhas = div.text.split('\n')
+            relatorio_dicionario: typing.Dict[str, str] = {}
+
+            for linha in linhas:
+                if ':' in linha:
+                    chave, valor = map(str.strip, linha.split(':', 1))
+                    relatorio_dicionario[chave] = valor
+
+            dados_relatorio_dia.append(relatorio_dicionario)
+
+        contador_tanque: int = 0
+        relatorio_lista_final: typing.List = []
+
+        for tanque_atual in dados_relatorio_dia:
             data_execucao = datetime.datetime.now().strftime('%d-%m-%Y')
             hora_execucao = datetime.datetime.now().strftime('%H:%M:%S')
+            try:
+                contador_tanque += 1
+                volume_inicial_tanque = tanque_atual['Volume Inicial']
+                volume_combustivel = tanque_atual["Volume Combustível"]
 
-            dados: typing.Dict = {
-                "Data Execução": data_execucao,
-                "Litros": litros_text,
-                "Capacidade": capacidade_text,
-                "Porcentagem": porcentagem_text,
-                "Nome Tanque": h3_text,
-                "Hora Execução": hora_execucao
-            }
-            dados_tanques.append(dados)
+                dados_relatorio_final = {
+                    "Tanque": contador_tanque,
+                    "Volume inicial": volume_inicial_tanque,
+                    "Volume de Combustível": volume_combustivel,
+                    "Data Execução": data_execucao,
+                    "Hora Execução": hora_execucao
+                }
+                relatorio_lista_final.append(dados_relatorio_final)
 
-        except:
-            print("Impossível encontrar tanques")
+            except Exception as e:
+                print(f"Erro em Iteração!! {e}")
 
-        try:
-            link_relatorio_diario = wait.until(EC.presence_of_element_located((By.XPATH, '//a[contains(@href, "#/analitico") and contains(text(), "Rel. Diário")]')))
-        except:
-            print("IMPOSSIVEL")
-        
-    try:
-        time.sleep(7)
-        link_relatorio_diario.click()
+        self.driver.quit()
+        pprint.pprint(relatorio_lista_final)
         time.sleep(3)
-        print("CLICADO")
-    except Exception as e:
-        print(f"Erro ao clicar no link: {e}")
-    
-    dados_relatorio_dia: typing.List[typing.Dict[str, str]] = []
-    tanques_relatorio = wait.until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, 'div.content.border-solid')))
-    for div in tanques_relatorio:
-        linhas = div.text.split('\n')
-        relatorio_dicionario: typing.Dict[str, str] = {}
 
-        for linha in linhas:
-            if ':' in linha:
-                chave, valor = map(str.strip, linha.split(':', 1))
-                relatorio_dicionario[chave] = valor
-        
-        dados_relatorio_dia.append(relatorio_dicionario)
-    #pprint.pprint(dados_relatorio_dia)
-    contador_tanque: int = 0
-    relatorio_lista_final: typing.List = []
+        # Adicionando dados ao excel
+        self.enviar_dados_excel(dados_tanques)
+        self.enviar_relatorio_excel(relatorio_lista_final)
 
-    for tanque_atual in dados_relatorio_dia:
+    def enviar_dados_excel(self, dados_tanques: typing.List) -> None:
         try:
-            contador_tanque += 1
-            volume_inicial_tanque = tanque_atual['Volume Inicial']
-            #Não foi necessário usar a capacidade
-            #capacidade_total = tanque_atual['Capacidade']
-            volume_combustivel = tanque_atual["Volume Combustível"]
+            wb = load_workbook(TANQUE_EXCEL_FILE)
+            sheet = wb.active
+        except FileNotFoundError:
+            wb = Workbook()
+            sheet = wb.active
+            sheet.append(["Data Execução", "Litros", "Capacidade", "Porcentagem", "Nome", "Hora Execução"])
 
-            dados_relatorio_final = {
-                "Tanque": contador_tanque,
-                "Volume inicial": volume_inicial_tanque,
-                #"Capacidade": capacidade_total,
-                "Volume de Combustível": volume_combustivel
-            }
-            relatorio_lista_final.append(dados_relatorio_final)
+        for dados in dados_tanques:
+            sheet.append([dados["Data Execução"], dados["Litros"], dados["Capacidade"],
+                          dados["Porcentagem"], dados["Nome Tanque"], dados["Hora Execução"]])
 
-        except:
-            print("Erro em Iteração!!")
-    
-    driver.quit()
-    pprint.pprint(relatorio_lista_final)
-    time.sleep(3)
+        wb.save(TANQUE_EXCEL_FILE)
+        print("Os dados foram exportados para o Excel com sucesso.")
 
-    #Adicionando dados ao excel
-    enviar_dados_excel(dados_tanques)
-    enviar_relatorio_excel(relatorio_lista_final)
+    def enviar_relatorio_excel(self, relatorio: typing.List) -> None:
+        try:
+            wb = load_workbook(RELATORIO_EXCEL_FILE)
+            sheet = wb.active
+        except FileNotFoundError:
+            wb = Workbook()
+            sheet = wb.active
+            sheet.append(["Tanque", "Volume Inicial", "Volume de Combustível", "Data execução", "Hora execução"])
 
-def enviar_dados_excel(dados_tanques):
-    try:
-        wb = load_workbook('tanque_excel.xlsx')
-        sheet = wb.active
-    except FileNotFoundError:
-        wb = Workbook()
-        sheet = wb.active
-        sheet.append(["Data Execução", "Litros", "Capacidade", "Porcentagem", "Nome", "Hora Execução"])
+        for dado_atual in relatorio:
+            sheet.append([dado_atual["Tanque"], dado_atual["Volume inicial"],
+                          dado_atual["Volume de Combustível"], dado_atual["Data Execução"],
+                          dado_atual["Hora Execução"]])
 
-    for dados in dados_tanques:
-        sheet.append([dados["Data Execução"], dados["Litros"], dados["Capacidade"],
-                      dados["Porcentagem"], dados["Nome Tanque"], dados["Hora Execução"]]
-                      
-                      )
-
-    wb.save('tanque_excel.xlsx')
-    print("Os dados foram exportados para o Excel com sucesso.")
-
-
-def enviar_relatorio_excel(relatorio):
-    try:
-        wb = load_workbook('relatorio_excel.xlsx')
-        sheet = wb.active
-    except FileNotFoundError:
-        wb = Workbook()
-        sheet = wb.active
-        sheet.append(["Tanque", "Volume Inicial", "Volume de Combustível"])
-    
-    for dado_atual in relatorio:
-        sheet.append([dado_atual["Tanque"], dado_atual["Volume inicial"],
-                      dado_atual["Volume de Combustível"]])
-    
-    wb.save('relatorio_excel.xlsx')
-    print("Os dados de relatório exportados para o Excel com sucesso.")
-
+        wb.save(RELATORIO_EXCEL_FILE)
+        print("Os dados de relatório foram exportados para o Excel com sucesso.")
 
 def main():
-    iniciar_navegador("https://xpert.com.br/atg/")
-    buscar_campos("inputUser", "inputPass", "", "")
-    busca_tanques()
-    driver.quit()
-
+    tanques_hexano_class = TanqueHexano("https://xpert.com.br/atg/",
+                                  "inputUser",
+                                  "inputPass",
+                                  "",
+                                  "")
+    tanques_hexano_class.iniciar_navegador()
+    tanques_hexano_class.buscar_campos()
+    tanques_hexano_class.busca_tanques()
 
 if __name__ == "__main__":
     main()
